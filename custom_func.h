@@ -87,4 +87,5 @@ void Button_Process_in_polling(void);
 void Button_Process_in_IRQ(void);
 void UARTx_ErrorCheckProcess(unsigned char err);
 void UARTx_Process(unsigned char rxbuf);
+void RH850_software_reset(void);
 void hardware_init(void);

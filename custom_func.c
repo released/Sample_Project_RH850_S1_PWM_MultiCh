@@ -463,17 +463,30 @@ void UARTx_Process(unsigned char rxbuf)
 
             case 'X':
             case 'x':
-                // RL78_soft_reset(7);
-                break;
             case 'Z':
             case 'z':
-                // RL78_soft_reset(1);
+                RH850_software_reset();
                 break;
 
             default:       
                 // exception
                 break;                
         }
+    }
+}
+
+void RH850_software_reset(void)
+{
+    uint32_t  reg32_value;
+
+    reg32_value = 0x00000001UL;
+    WPROTR.PROTCMD0 = _WRITE_PROTECT_COMMAND;
+    RESCTL.SWRESA = reg32_value;
+    RESCTL.SWRESA = (uint32_t) ~reg32_value;
+    RESCTL.SWRESA = reg32_value;
+    while (WPROTR.PROTS0 != reg32_value)
+    {
+        NOP();
     }
 }
 
@@ -509,7 +522,7 @@ void hardware_init(void)
     */
     R_Config_UART0_Receive(&g_uart0rxbuf, 1U);
     R_Config_UART0_Start();
-    
+  
     /*
         button :
             - P8_2/INTP6
