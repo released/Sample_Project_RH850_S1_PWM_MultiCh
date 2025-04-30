@@ -142,15 +142,6 @@ void delay_ms(unsigned long ms)
     }
 }
 
-
-
-/*
-    TAUB0 PWM : 10K
-        - SLAVE 1 : P12 
-        - SLAVE 2 : P11
-        - SLAVE 3 : P10
-        - SLAVE 4 : P31
-*/
 unsigned short get_pwm_ch_clk_src(void)
 {
 	return (pwm_clk_src);
@@ -194,10 +185,10 @@ void pwm_ch_Duty_Decrease(unsigned char idx)
     set_pwm_ch_duty(idx,tmp);
 
     #if 1   // debug
-    printf("[%d]-duty:0x%02X,",idx,pwm_master);
-    printf("0x%02X,",duty_hex );
-    printf("0x%02X,",tmp );
-    printf("(%2.2f)\r\n",(float) tmp*PWM_RESOLUTION/(pwm_master) );
+    tiny_printf("[%d]-duty:0x%02X,",idx,pwm_master);
+    tiny_printf("0x%02X,",duty_hex );
+    tiny_printf("0x%02X,",tmp );
+    tiny_printf("(%f)\r\n",(float) tmp*PWM_RESOLUTION/(pwm_master) );
     #endif
 
     switch(idx)
@@ -232,10 +223,10 @@ void pwm_ch_Duty_Increase(unsigned char idx)
     set_pwm_ch_duty(idx,tmp);
 
     #if 1   // debug
-    printf("[%d]+duty:0x%02X,",idx,pwm_master);
-    printf("0x%02X,",duty_hex );
-    printf("0x%02X,",tmp );
-    printf("(%2.2f)\r\n",(float) tmp*PWM_RESOLUTION/(pwm_master) );
+    tiny_printf("[%d]+duty:0x%02X,",idx,pwm_master);
+    tiny_printf("0x%02X,",duty_hex );
+    tiny_printf("0x%02X,",tmp );
+    tiny_printf("(%f)\r\n",(float) tmp*PWM_RESOLUTION/(pwm_master) );
     #endif
 
     switch(idx)
