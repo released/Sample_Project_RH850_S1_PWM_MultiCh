@@ -1,5 +1,5 @@
 /*_____ I N C L U D E S ____________________________________________________*/
-#include <stdio.h>
+// #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 
@@ -22,8 +22,8 @@
 void SendChar(unsigned char ch);
 int putchar(int c);
 
-int fputc(int ch, FILE *f);
-int fputs(const char *str, FILE *fp);
-int puts(const char *s);
+// int fputc(int ch, FILE *f);
+// int fputs(const char *str, FILE *fp);
+// int puts(const char *s);
 
 int tiny_printf(const char *fmt, ...);

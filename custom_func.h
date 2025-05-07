@@ -2,7 +2,9 @@
 
 /*_____ D E C L A R A T I O N S ____________________________________________*/
 
-#define GPIO_GETLEVEL(n,Pin)                            (PORT.PPR##n &= 1u<<Pin)
+// #define GPIO_GETLEVEL(n,Pin)                            (PORT.PPR##n &= 1u<<Pin)
+#define GPIO_GETLEVEL(n,Pin)                                (((PORT.PPR##n & 1u<<Pin) == 0U)? 0U : 1U)
+
 #define GPIO_TOGGLE(n,Pin)                              (PORT.PNOT##n |= 1u<<Pin)
 #define GPIO_HIGH(Port,Pin)                             (PORT.Port |= 1u<<Pin)
 #define GPIO_LOW(Port,Pin)                              (PORT.Port &= ~(1u<<Pin))

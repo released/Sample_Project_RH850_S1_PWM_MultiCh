@@ -102,7 +102,8 @@ void copy_buffer(void *dest, void *src, unsigned int size)
 	#endif
 }
 
-void dump_buffer(unsigned char *pucBuff, int nBytes)
+
+void dump_buffer16(unsigned short *pucBuff, int nBytes)
 {
     unsigned short  i = 0;
     
@@ -118,9 +119,50 @@ void dump_buffer(unsigned char *pucBuff, int nBytes)
     dbg_printf("\r\n\r\n");
 }
 
-void dump_buffer_hex(unsigned char *pucBuff, int nBytes)
+void dump_buffer16_hex(unsigned short *pucBuff, int nBytes)
 {
-    int     nIdx, i;
+    int nIdx, i;
+
+    nIdx = 0;
+    while (nBytes > 0)
+    {
+        dbg_printf("0x%04X  ", nIdx);
+        for (i = 0; i < 16; i++)
+            dbg_printf("%02X ", pucBuff[nIdx + i]);
+        dbg_printf("  ");
+        for (i = 0; i < 16; i++)
+        {
+            if ((pucBuff[nIdx + i] >= 0x20) && (pucBuff[nIdx + i] < 127))
+                dbg_printf("%c", pucBuff[nIdx + i]);
+            else
+                dbg_printf(".");
+            nBytes--;
+        }
+        nIdx += 16;
+        dbg_printf("\n");
+    }
+    dbg_printf("\n");
+}
+
+void dump_buffer8(unsigned char *pucBuff, int nBytes)
+{
+    unsigned short  i = 0;
+    
+    dbg_printf("dump_buffer : %2d\r\n" , nBytes);    
+    for (i = 0 ; i < nBytes ; i++)
+    {
+        dbg_printf("0x%02X," , pucBuff[i]);
+        if ((i+1)%8 ==0)
+        {
+            dbg_printf("\r\n");
+        }            
+    }
+    dbg_printf("\r\n\r\n");
+}
+
+void dump_buffer8_hex(unsigned char *pucBuff, int nBytes)
+{
+    int nIdx, i;
 
     nIdx = 0;
     while (nBytes > 0)

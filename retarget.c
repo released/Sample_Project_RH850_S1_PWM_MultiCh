@@ -31,354 +31,469 @@ int putchar(int c)
     #endif
 }
 
-#if 0   // linux
-/*
-	https://github.com/torvalds/linux/blob/master/lib/string.c
-	https://github.com/torvalds/linux/blob/master/arch/x86/boot/printf.c
-*/
+#if 1
+#include <stdarg.h>
+// #include <stdint.h>
+#include <stdbool.h>
+// #include <stdio.h>   // for putchar()
 
-size_t strnlen(const char *s, size_t count)
-{
-	const char *sc;
+// Flags for formatting
+#define FLAG_LEFT   (1 << 0)  // '-'
+#define FLAG_PLUS   (1 << 1)  // '+'
+#define FLAG_SPACE  (1 << 2)  // ' '
+#define FLAG_ZERO   (1 << 3)  // '0'
+#define FLAG_HASH   (1 << 4)  // '#'
 
-	for (sc = s; count-- && *sc != '\0'; ++sc)
-		/* nothing */;
-	return sc - s;
-}
+// Forward declarations of helper functions
+static void print_string(const char *s, int width, int precision, int flags);
+static void print_char(char c, int width, int flags);
+static void print_integer(long long value, int base, int width, int precision, int flags, bool uppercase);
+static void print_unsigned(unsigned long long value, int base, int width, int precision, int flags, bool uppercase);
+static void print_pointer(void *ptr, int width, int precision, int flags);
+static void print_float(double value, int width, int precision, int flags, char spec);
 
-int fputc(int ch, FILE *f) 
-{
-    (void)f;
-    SendChar(ch);
-    return ch;
-}
+typedef unsigned long uintptr_t;
 
-int fputs(const char *str, FILE *fp) 
-{
-    while (*str) 
-    {                               // Continue while the current character is not '\0'
-        fputc(*str, fp);            // Write the current character to the file
-        str++;                      // Move the pointer to the next character
-        return *str;
+// The main super_printf function
+int tiny_printf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+	int printed = 0;
+    char ch;
+    while ((ch = *fmt++) != '\0') {
+        if (ch != '%') {
+            // Literal character
+            putchar(ch);
+        } else {
+            // Parse flags
+            int flags = 0;
+            bool parsing = true;
+            while (parsing) {
+                switch (*fmt) {
+                    case '-': flags |= FLAG_LEFT; fmt++; break;
+                    case '+': flags |= FLAG_PLUS; fmt++; break;
+                    case ' ': flags |= FLAG_SPACE; fmt++; break;
+                    case '0': flags |= FLAG_ZERO; fmt++; break;
+                    case '#': flags |= FLAG_HASH; fmt++; break;
+                    default: parsing = false; break;
+                }
+            }
+            // Parse width (number)
+            int width = 0;
+            while (*fmt >= '0' && *fmt <= '9') {
+                width = width * 10 + (*fmt - '0');
+                fmt++;
+            }
+            // Parse precision
+            int precision = -1;
+            if (*fmt == '.') {
+                fmt++;
+                precision = 0;
+                while (*fmt >= '0' && *fmt <= '9') {
+                    precision = precision * 10 + (*fmt - '0');
+                    fmt++;
+                }
+            }
+            // Parse length modifier (l or ll)
+            int length = 0; // 0=none, 1=l, 2=ll
+            if (*fmt == 'l') {
+                fmt++;
+                if (*fmt == 'l') { length = 2; fmt++; }
+                else length = 1;
+            }
+            // Specifier
+            char spec = *fmt++;
+            switch (spec) {
+                case '%':
+                    putchar('%');
+                    break;
+                case 'c': {
+                    // Character
+                    char c = (char)va_arg(args, int);
+                    print_char(c, width, flags);
+                    break;
+                }
+                case 's': {
+                    // String
+                    char *s = va_arg(args, char*);
+                    print_string(s, width, precision, flags);
+                    break;
+                }
+                case 'd':
+                case 'i': {
+                    // Signed integer
+                    long long val;
+                    if (length == 2) val = va_arg(args, long long);
+                    else if (length == 1) val = va_arg(args, long);
+                    else val = va_arg(args, int);
+                    print_integer(val, 10, width, precision, flags, false);
+                    break;
+                }
+                case 'u': {
+                    // Unsigned integer
+                    unsigned long long val;
+                    if (length == 2) val = va_arg(args, unsigned long long);
+                    else if (length == 1) val = va_arg(args, unsigned long);
+                    else val = va_arg(args, unsigned int);
+                    print_unsigned(val, 10, width, precision, flags, false);
+                    break;
+                }
+                case 'x': {
+                    // Hex lowercase
+                    unsigned long long val;
+                    if (length == 2) val = va_arg(args, unsigned long long);
+                    else if (length == 1) val = va_arg(args, unsigned long);
+                    else val = va_arg(args, unsigned int);
+                    print_unsigned(val, 16, width, precision, flags, false);
+                    break;
+                }
+                case 'X': {
+                    // Hex uppercase
+                    unsigned long long val;
+                    if (length == 2) val = va_arg(args, unsigned long long);
+                    else if (length == 1) val = va_arg(args, unsigned long);
+                    else val = va_arg(args, unsigned int);
+                    print_unsigned(val, 16, width, precision, flags, true);
+                    break;
+                }
+                case 'o': {
+                    // Octal
+                    unsigned long long val;
+                    if (length == 2) val = va_arg(args, unsigned long long);
+                    else if (length == 1) val = va_arg(args, unsigned long);
+                    else val = va_arg(args, unsigned int);
+                    print_unsigned(val, 8, width, precision, flags, false);
+                    break;
+                }
+                case 'p': {
+                    // Pointer (print as 0xHEX)
+                    void *ptr = va_arg(args, void*);
+                    print_pointer(ptr, width, precision, flags);
+                    break;
+                }
+                case 'f':
+                case 'F': {
+                    // Floating point fixed
+                    double val = va_arg(args, double);
+                    if (precision < 0) precision = 6;
+                    print_float(val, width, precision, flags, spec);
+                    break;
+                }
+                case 'e':
+                case 'E': {
+                    // Floating point scientific
+                    double val = va_arg(args, double);
+                    if (precision < 0) precision = 6;
+                    print_float(val, width, precision, flags, spec);
+                    break;
+                }
+                default:
+                    // Unsupported specifier - print literally
+                    putchar('%');
+                    putchar(spec);
+                    break;
+            }
+        }
     }
-    return EOF;
+    va_end(args);
+
+	return printed;   	
 }
 
-int puts(const char *s)
-{
-	if (fputs(s, stdout) == EOF)
-		return EOF;
-	return putchar('\n');
+// Print a single char with optional padding
+static void print_char(char c, int width, int flags) {
+    int pad = (width > 1) ? width - 1 : 0;
+    if (!(flags & FLAG_LEFT)) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
+    putchar(c);
+    if (flags & FLAG_LEFT) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
 }
 
-static int isdigit(int ch)
-{
-	return (ch >= '0') && (ch <= '9');
+// Print a string with width and precision
+static void print_string(const char *s, int width, int precision, int flags) {
+    if (!s) s = "(null)";
+    // Compute string length up to precision
+    int len = 0;
+    while (s[len] && (precision < 0 || len < precision)) len++;
+    int pad = (width > len) ? width - len : 0;
+    if (!(flags & FLAG_LEFT)) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
+    for (int i = 0; i < len; i++) {
+        putchar(s[i]);
+    }
+    if (flags & FLAG_LEFT) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
 }
 
-static int skip_atoi(const char **s)
-{
-	int i = 0;
-
-	while (isdigit(**s))
-		i = i * 10 + *((*s)++) - '0';
-	return i;
+// Print a signed integer (possibly 64-bit) in given base
+static void print_integer(long long value, int base, int width, int precision, int flags, bool uppercase) {
+    bool negative = false;
+    unsigned long long uval;
+    if (value < 0) {
+        negative = true;
+        uval = (unsigned long long)(-value);
+    } else {
+        uval = (unsigned long long)value;
+    }
+    // Convert number to string (in reverse)
+    char buf[32];
+    int len = 0;
+    if (uval == 0) {
+        buf[len++] = '0';
+    } else {
+        while (uval > 0) {
+            int digit = uval % base;
+            if (digit < 10) buf[len++] = '0' + digit;
+            else buf[len++] = (uppercase ? 'A' : 'a') + (digit - 10);
+            uval /= base;
+        }
+    }
+    // Apply precision (minimum digits)
+    int num_len = len;
+    if (precision > num_len) {
+        for (int i = num_len; i < precision; i++) {
+            buf[len++] = '0';
+        }
+    }
+    // Determine if we need a sign or space
+    int sign_char = 0;
+    if (negative) sign_char = 1;
+    else if (flags & FLAG_PLUS) sign_char = 1;
+    else if (flags & FLAG_SPACE) sign_char = 1;
+    int total_len = len + sign_char;
+    int pad = (width > total_len) ? width - total_len : 0;
+    // Print left spaces if needed
+    if (!(flags & FLAG_LEFT) && !(flags & FLAG_ZERO)) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
+    // Print sign or space
+    if (negative) {
+        putchar('-');
+    } else if (flags & FLAG_PLUS) {
+        putchar('+');
+    } else if (flags & FLAG_SPACE) {
+        putchar(' ');
+    }
+    // Print zero padding
+    if (!(flags & FLAG_LEFT) && (flags & FLAG_ZERO)) {
+        for (int i = 0; i < pad; i++) putchar('0');
+    }
+    // Print the digits in correct order
+    for (int i = len - 1; i >= 0; i--) {
+        putchar(buf[i]);
+    }
+    // Print right spaces if left-aligned
+    if (flags & FLAG_LEFT) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
 }
 
-#define ZEROPAD	1		/* pad with zero */
-#define SIGN	2		/* unsigned/signed long */
-#define PLUS	4		/* show plus */
-#define SPACE	8		/* space if plus */
-#define LEFT	16		/* left justified */
-#define SMALL	32		/* Must be 32 == 0x20 */
-#define SPECIAL	64		/* 0x */
-
-// #define __do_div(n, base)						\
-// ({												\
-// 	int __res;									\
-// 												\
-// 	__res = ((uint64_t) n) % (uint32_t) base;	\
-// 	n = ((uint64_t) n) / (uint32_t) base;		\
-// 	__res;										\
-// })
-
-int __do_div(long n,int base)
-{
-	int __res;
-	__res = ((uint64_t) n) % (uint32_t) base;
-	n = ((uint64_t) n) / (uint32_t) base;
-	return __res;
+// Print an unsigned integer in given base (e.g. decimal, hex, octal)
+static void print_unsigned(unsigned long long uval, int base, int width, int precision, int flags, bool uppercase) {
+    char buf[32];
+    int len = 0;
+    if (uval == 0) {
+        buf[len++] = '0';
+    } else {
+        while (uval > 0) {
+            int digit = uval % base;
+            if (digit < 10) buf[len++] = '0' + digit;
+            else buf[len++] = (uppercase ? 'A' : 'a') + (digit - 10);
+            uval /= base;
+        }
+    }
+    int num_len = len;
+    if (precision > num_len) {
+        for (int i = num_len; i < precision; i++) {
+            buf[len++] = '0';
+        }
+    }
+    int total_len = len;
+    int pad = (width > total_len) ? width - total_len : 0;
+    if (!(flags & FLAG_LEFT) && !(flags & FLAG_ZERO)) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
+    if (!(flags & FLAG_LEFT) && (flags & FLAG_ZERO)) {
+        for (int i = 0; i < pad; i++) putchar('0');
+    }
+    for (int i = len - 1; i >= 0; i--) {
+        putchar(buf[i]);
+    }
+    if (flags & FLAG_LEFT) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
 }
 
-static char *number(char *str, long num, int base, int size, int precision,
-		    int type)
-{
-	/* we are called with base 8, 10 or 16, only, thus don't need "G..."  */
-	static const char digits[16] = "0123456789ABCDEF"; /* "GHIJKLMNOPQRSTUVWXYZ"; */
-
-	char tmp[66];
-	char c, sign, locase;
-	int i;
-
-	/* locase = 0 or 0x20. ORing digits or letters with 'locase'
-	 * produces same digits or (maybe lowercased) letters */
-	locase = (type & SMALL);
-	if (type & LEFT)
-		type &= ~ZEROPAD;
-	if (base < 2 || base > 16)
-		return NULL;
-	c = (type & ZEROPAD) ? '0' : ' ';
-	sign = 0;
-	if (type & SIGN) {
-		if (num < 0) {
-			sign = '-';
-			num = -num;
-			size--;
-		} else if (type & PLUS) {
-			sign = '+';
-			size--;
-		} else if (type & SPACE) {
-			sign = ' ';
-			size--;
-		}
-	}
-	if (type & SPECIAL) {
-		if (base == 16)
-			size -= 2;
-		else if (base == 8)
-			size--;
-	}
-	i = 0;
-	if (num == 0)
-		tmp[i++] = '0';
-	else
-		while (num != 0)
-			tmp[i++] = (digits[__do_div(num, base)] | locase);
-	if (i > precision)
-		precision = i;
-	size -= precision;
-	if (!(type & (ZEROPAD + LEFT)))
-		while (size-- > 0)
-			*str++ = ' ';
-	if (sign)
-		*str++ = sign;
-	if (type & SPECIAL) {
-		if (base == 8)
-			*str++ = '0';
-		else if (base == 16) {
-			*str++ = '0';
-			*str++ = ('X' | locase);
-		}
-	}
-	if (!(type & LEFT))
-		while (size-- > 0)
-			*str++ = c;
-	while (i < precision--)
-		*str++ = '0';
-	while (i-- > 0)
-		*str++ = tmp[i];
-	while (size-- > 0)
-		*str++ = ' ';
-	return str;
+// Print a pointer (treated as hex), with leading 0x
+static void print_pointer(void *ptr, int width, int precision, int flags) {
+    unsigned long long uval = (unsigned long long)(uintptr_t)ptr;
+    char buf[32];
+    int len = 0;
+    if (uval == 0) {
+        buf[len++] = '0';
+    } else {
+        while (uval > 0) {
+            int digit = uval % 16;
+            if (digit < 10) buf[len++] = '0' + digit;
+            else buf[len++] = 'a' + (digit - 10);
+            uval /= 16;
+        }
+    }
+    int total_len = len + 2; // "0x" prefix
+    int pad = (width > total_len) ? width - total_len : 0;
+    if (!(flags & FLAG_LEFT)) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
+    // "0x" prefix
+    putchar('0');
+    putchar('x');
+    for (int i = len - 1; i >= 0; i--) {
+        putchar(buf[i]);
+    }
+    if (flags & FLAG_LEFT) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
 }
 
-int vsprintf(char *buf, const char *fmt, va_list args)
-{
-	int len;
-	unsigned long num;
-	int i, base;
-	char *str;
-	const char *s;
-
-	int flags;		/* flags to number() */
-
-	int field_width;	/* width of output field */
-	int precision;		/* min. # of digits for integers; max
-				   number of chars for from string */
-	int qualifier;		/* 'h', 'l', or 'L' for integer fields */
-
-	for (str = buf; *fmt; ++fmt) {
-		if (*fmt != '%') {
-			*str++ = *fmt;
-			continue;
-		}
-
-		/* process flags */
-		flags = 0;
-	      repeat:
-		++fmt;		/* this also skips first '%' */
-		switch (*fmt) {
-		case '-':
-			flags |= LEFT;
-			goto repeat;
-		case '+':
-			flags |= PLUS;
-			goto repeat;
-		case ' ':
-			flags |= SPACE;
-			goto repeat;
-		case '#':
-			flags |= SPECIAL;
-			goto repeat;
-		case '0':
-			flags |= ZEROPAD;
-			goto repeat;
-		}
-
-		/* get field width */
-		field_width = -1;
-		if (isdigit(*fmt))
-			field_width = skip_atoi(&fmt);
-		else if (*fmt == '*') {
-			++fmt;
-			/* it's the next argument */
-			field_width = va_arg(args, int);
-			if (field_width < 0) {
-				field_width = -field_width;
-				flags |= LEFT;
-			}
-		}
-
-		/* get the precision */
-		precision = -1;
-		if (*fmt == '.') {
-			++fmt;
-			if (isdigit(*fmt))
-				precision = skip_atoi(&fmt);
-			else if (*fmt == '*') {
-				++fmt;
-				/* it's the next argument */
-				precision = va_arg(args, int);
-			}
-			if (precision < 0)
-				precision = 0;
-		}
-
-		/* get the conversion qualifier */
-		qualifier = -1;
-		if (*fmt == 'h' || *fmt == 'l' || *fmt == 'L') {
-			qualifier = *fmt;
-			++fmt;
-		}
-
-		/* default base */
-		base = 10;
-
-		switch (*fmt) {
-		case 'c':
-			if (!(flags & LEFT))
-				while (--field_width > 0)
-					*str++ = ' ';
-			*str++ = (unsigned char)va_arg(args, int);
-			while (--field_width > 0)
-				*str++ = ' ';
-			continue;
-
-		case 's':
-			s = va_arg(args, char *);
-			len = strnlen(s, precision);
-
-			if (!(flags & LEFT))
-				while (len < field_width--)
-					*str++ = ' ';
-			for (i = 0; i < len; ++i)
-				*str++ = *s++;
-			while (len < field_width--)
-				*str++ = ' ';
-			continue;
-
-		case 'p':
-			if (field_width == -1) {
-				field_width = 2 * sizeof(void *);
-				flags |= ZEROPAD;
-			}
-			str = number(str,
-				     (unsigned long)va_arg(args, void *), 16,
-				     field_width, precision, flags);
-			continue;
-
-		case 'n':
-			if (qualifier == 'l') {
-				long *ip = va_arg(args, long *);
-				*ip = (str - buf);
-			} else {
-				int *ip = va_arg(args, int *);
-				*ip = (str - buf);
-			}
-			continue;
-
-		case '%':
-			*str++ = '%';
-			continue;
-
-			/* integer number formats - set up the flags and "break" */
-		case 'o':
-			base = 8;
-			break;
-
-		case 'x':
-			flags |= SMALL;
-			// fallthrough;
-		case 'X':
-			base = 16;
-			break;
-
-		case 'd':
-		case 'i':
-			flags |= SIGN;
-			break;
-
-		case 'u':
-			break;
-
-		default:
-			*str++ = '%';
-			if (*fmt)
-				*str++ = *fmt;
-			else
-				--fmt;
-			continue;
-		}
-		if (qualifier == 'l')
-			num = va_arg(args, unsigned long);
-		else if (qualifier == 'h') {
-			num = (unsigned short)va_arg(args, int);
-			if (flags & SIGN)
-				num = (short)num;
-		} else if (flags & SIGN)
-			num = va_arg(args, int);
-		else
-			num = va_arg(args, unsigned int);
-		str = number(str, num, base, field_width, precision, flags);
-	}
-	*str = '\0';
-	return str - buf;
-}
-
-int sprintf(char *buf, const char *fmt, ...)
-{
-	va_list args;
-	int i;
-
-	va_start(args, fmt);
-	i = vsprintf(buf, fmt, args);
-	va_end(args);
-	return i;
-}
-
-int tiny_printf(const char *fmt, ...)
-{
-	char printf_buf[1024];
-	va_list args;
-	int printed;
-
-	va_start(args, fmt);
-	printed = vsprintf(printf_buf, fmt, args);
-	va_end(args);
-
-	puts(printf_buf);
-
-	return printed;
+// Print a floating-point value (%f or %e/%E)
+static void print_float(double value, int width, int precision, int flags, char spec) {
+    // Handle sign
+    bool negative = false;
+    if (value < 0.0 || (value == 0.0 && 1.0/value < 0.0)) {
+        negative = true;
+        value = -value;
+    }
+    // Special case: value == 0.0
+    if (value == 0.0) {
+        // Build "0.000..." string manually
+        char buf[64];
+        int len = 0;
+        buf[len++] = '0';
+        if (precision > 0 || (flags & FLAG_HASH)) {
+            buf[len++] = '.';
+            for (int i = 0; i < precision; i++) {
+                buf[len++] = '0';
+            }
+        }
+        if (spec == 'e' || spec == 'E') {
+            buf[len++] = spec;
+            buf[len++] = '+';
+            buf[len++] = '0';
+            buf[len++] = '0';
+        }
+        int sign_char = negative ? 1 : ((flags & FLAG_PLUS) ? 1 : ((flags & FLAG_SPACE) ? 1 : 0));
+        int total_len = len + sign_char;
+        int pad = (width > total_len) ? width - total_len : 0;
+        if (!(flags & FLAG_LEFT) && !(flags & FLAG_ZERO)) {
+            for (int i = 0; i < pad; i++) putchar(' ');
+        }
+        if (negative) putchar('-');
+        else if (flags & FLAG_PLUS) putchar('+');
+        else if (flags & FLAG_SPACE) putchar(' ');
+        if (!(flags & FLAG_LEFT) && (flags & FLAG_ZERO)) {
+            for (int i = 0; i < pad; i++) putchar('0');
+        }
+        for (int i = 0; i < len; i++) {
+            putchar(buf[i]);
+        }
+        if (flags & FLAG_LEFT) {
+            for (int i = 0; i < pad; i++) putchar(' ');
+        }
+        return;
+    }
+    // Handle scientific exponent if needed
+    int exp = 0;
+    if (spec == 'e' || spec == 'E') {
+        // Normalize to 1 <= value < 10
+        while (value >= 10.0) {
+            value /= 10.0;
+            exp++;
+        }
+        while (value < 1.0) {
+            value *= 10.0;
+            exp--;
+        }
+    }
+    // Apply rounding by adding half-unit at last place
+    double rounding = 0.5;
+    for (int i = 0; i < precision; i++) {
+        rounding /= 10.0;
+    }
+    value += rounding;
+    // After rounding, check if it rolled over (e.g. 9.99 -> 10.0)
+    if ((spec == 'e' || spec == 'E') && value >= 10.0) {
+        value /= 10.0;
+        exp++;
+    }
+    // Split integer and fractional parts
+    unsigned long long int_part = (unsigned long long)value;
+    double frac_part = value - (double)int_part;
+    // Convert integer part to string
+    char buf[64];
+    int len = 0;
+    if (int_part == 0) {
+        buf[len++] = '0';
+    } else {
+        char tmp[32];
+        int tlen = 0;
+        while (int_part > 0) {
+            tmp[tlen++] = '0' + (int_part % 10);
+            int_part /= 10;
+        }
+        for (int i = tlen - 1; i >= 0; i--) {
+            buf[len++] = tmp[i];
+        }
+    }
+    // Decimal point and fraction digits
+    if (precision > 0 || (flags & FLAG_HASH)) {
+        buf[len++] = '.';
+        for (int i = 0; i < precision; i++) {
+            frac_part *= 10.0;
+            int digit = (int)frac_part;
+            buf[len++] = '0' + digit;
+            frac_part -= digit;
+        }
+    }
+    // Append exponent if scientific
+    if (spec == 'e' || spec == 'E') {
+        buf[len++] = spec;
+        // Exponent sign
+        if (exp < 0) {
+            buf[len++] = '-';
+            exp = -exp;
+        } else {
+            buf[len++] = '+';
+        }
+        // Two-digit exponent (zero-padded)
+        int exp1 = exp / 10;
+        int exp0 = exp % 10;
+        buf[len++] = '0' + exp1;
+        buf[len++] = '0' + exp0;
+    }
+    // Now buf[0..len-1] has the number string
+    int sign_char = negative ? 1 : ((flags & FLAG_PLUS) ? 1 : ((flags & FLAG_SPACE) ? 1 : 0));
+    int total_len = len + sign_char;
+    int pad = (width > total_len) ? width - total_len : 0;
+    if (!(flags & FLAG_LEFT) && !(flags & FLAG_ZERO)) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
+    if (negative) putchar('-');
+    else if (flags & FLAG_PLUS) putchar('+');
+    else if (flags & FLAG_SPACE) putchar(' ');
+    if (!(flags & FLAG_LEFT) && (flags & FLAG_ZERO)) {
+        for (int i = 0; i < pad; i++) putchar('0');
+    }
+    for (int i = 0; i < len; i++) {
+        putchar(buf[i]);
+    }
+    if (flags & FLAG_LEFT) {
+        for (int i = 0; i < pad; i++) putchar(' ');
+    }
 }
 
 

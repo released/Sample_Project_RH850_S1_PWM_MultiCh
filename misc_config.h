@@ -168,5 +168,7 @@ struct flag_32bit
 void compare_buffer(unsigned char *src, unsigned char *des, int nBytes);
 void reset_buffer(void *dest, unsigned int val, unsigned int size);
 void copy_buffer(void *dest, void *src, unsigned int size);
-void dump_buffer(unsigned char *pucBuff, int nBytes);
-void dump_buffer_hex(unsigned char *pucBuff, int nBytes);
+void dump_buffer16(unsigned short *pucBuff, int nBytes);
+void dump_buffer16_hex(unsigned short *pucBuff, int nBytes);
+void dump_buffer8(unsigned char *pucBuff, int nBytes);
+void dump_buffer8_hex(unsigned char *pucBuff, int nBytes);
